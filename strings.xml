@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">Islamic Digital Wall</string>
+    <string name="fajr">فجر</string>
+    <string name="dhuhr">ظہر</string>
+    <string name="asr">عصر</string>
+    <string name="maghrib">مغرب</string>
+    <string name="isha">عشاء</string>
+</resources>
+        
