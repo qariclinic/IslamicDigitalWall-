@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -e
+if [ -z "$1" ]; then
+  echo "Usage: ./build-and-push.sh <git-remote-url>"
+  exit 1
+fi
+REMOTE="$1"
+echo "Initializing git repo..."
+git init
+git add .
+git commit -m "Initial commit - Waj app skeleton"
+git branch -M main
+git remote add origin "$REMOTE"
+echo "Pushing to remote..."
+git push -u origin main
+echo "If you want to build an APK via Expo (classic), run:"
+echo "  npm install -g expo-cli"
+echo "  expo login"
+echo "  expo build:android"
+echo "Or use EAS (recommended for managed projects):"
+echo "  npm install -g eas-cli"
+echo "  eas login"
+echo "  eas build -p android --profile production"

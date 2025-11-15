@@ -1,0 +1,187 @@
+import React, { useEffect, useState, useRef } from 'react';
+import { Text, View, StyleSheet, Button, Platform, ScrollView, Alert } from 'react-native';
+import * as Location from 'expo-location';
+import { PrayerTimes, CalculationMethod, DateComponents, Coordinates } from 'adhan';
+import HijriDate from 'hijri-date';
+import * as Notifications from 'expo-notifications';
+import { Audio } from 'expo-av';
+import Constants from 'expo-constants';
+
+export default function App() {
+  const [location, setLocation] = useState(null);
+  const [errorMsg, setErrorMsg] = useState(null);
+  const [times, setTimes] = useState(null);
+  const [hijri, setHijri] = useState('');
+  const [now, setNow] = useState(new Date());
+  const azanSound = useRef(null);
+
+  useEffect(() => {
+    (async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setErrorMsg('?????? ?? ????? ???? ???');
+        return;
+      }
+      let loc = await Location.getCurrentPositionAsync({});
+      setLocation(loc.coords);
+    })();
+  }, []);
+
+  useEffect(() => {
+    const t = setInterval(()=> setNow(new Date()), 1000);
+    return ()=> clearInterval(t);
+  }, []);
+
+  useEffect(()=> {
+    if (location) calcTimes();
+  }, [location, now]);
+
+  useEffect(()=> {
+    const h = new HijriDate();
+    setHijri(h.format('dddd, DD MMMM YYYY AH'));
+  }, [now]);
+
+  async function calcTimes() {
+    try {
+      const coords = new Coordinates(location.latitude, location.longitude);
+      const date = new Date();
+      const params = CalculationMethod.MuslimWorldLeague();
+      const prayerTimes = new PrayerTimes(coords, date, params);
+      setTimes({
+        fajr: prayerTimes.fajr,
+        sunrise: prayerTimes.sunrise,
+        dhuhr: prayerTimes.dhuhr,
+        asr: prayerTimes.asr,
+        maghrib: prayerTimes.maghrib,
+        isha: prayerTimes.isha
+      });
+      scheduleAzanNotifications(prayerTimes);
+    } catch (e) {
+      console.warn(e);
+    }
+  }
+
+  async function scheduleAzanNotifications(prayerTimes) {
+    try {
+      await Notifications.requestPermissionsAsync();
+      await Notifications.cancelAllScheduledNotificationsAsync();
+
+      const map = [
+        ['Fajr', prayerTimes.fajr],
+        ['Dhuhr', prayerTimes.dhuhr],
+        ['Asr', prayerTimes.asr],
+        ['Maghrib', prayerTimes.maghrib],
+        ['Isha', prayerTimes.isha]
+      ];
+      for (const [name, dt] of map) {
+        if (!dt) continue;
+        const triggerSeconds = Math.floor((dt.getTime() - Date.now())/1000);
+        if (triggerSeconds <= 0) continue;
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: `???? — ${name}`,
+            body: `???? ${name} ?? ??? ???`,
+            data: { prayer: name }
+          },
+          trigger: { seconds: triggerSeconds }
+        });
+      }
+
+      Notifications.setNotificationHandler({
+        handleNotification: async () => ({ shouldShowAlert: true, shouldPlaySound: false, shouldSetBadge: false })
+      });
+      Notifications.addNotificationReceivedListener(async notification => {
+        playAzan();
+      });
+    } catch (e) {
+      console.warn('schedule error', e);
+    }
+  }
+
+  async function playAzan() {
+    try {
+      if (azanSound.current) {
+        await azanSound.current.replayAsync();
+        return;
+      }
+      const { sound } = await Audio.Sound.createAsync(
+        require('./assets/azan.mp3'),
+        { shouldPlay: true }
+      );
+      azanSound.current = sound;
+    } catch (e) {
+      console.warn('play error', e);
+    }
+  }
+
+  function isSpecialHijri() {
+    const hd = new HijriDate();
+    const m = hd.getMonth() + 1;
+    const d = hd.getDate();
+    const special = [];
+    if (m === 9) special.push('Ramadan');
+    if (m === 10 && d === 1) special.push('Eid al-Fitr');
+    if (m === 12 && d === 10) special.push('Eid al-Adha');
+    return special;
+  }
+
+  const special = isSpecialHijri();
+
+  return (
+    <ScrollView contentContainerStyle={styles.container}>
+      <Text style={styles.title}>Waj — ?????? ???</Text>
+      <Text style={styles.credit}>Made by Mufti Hafiz Muhammad Shoaib Khan Alai</Text>
+      <View style={styles.card}>
+        <Text style={styles.label}>????? ???</Text>
+        <Text style={styles.time}>{now.toLocaleTimeString()}</Text>
+        <Text style={styles.sub}>{now.toLocaleDateString()}</Text>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.label}>???? ?????</Text>
+        <Text style={styles.hijri}>{hijri}</Text>
+        {special.length>0 && <Text style={styles.highlight}>?????: {special.join(', ')}</Text>}
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.label}>???? ?? ?????</Text>
+        {times ? (
+          <>
+            <Text>???: {times.fajr.toLocaleTimeString()}</Text>
+            <Text>????: {times.sunrise.toLocaleTimeString()}</Text>
+            <Text>???: {times.dhuhr.toLocaleTimeString()}</Text>
+            <Text>???: {times.asr.toLocaleTimeString()}</Text>
+            <Text>????: {times.maghrib.toLocaleTimeString()}</Text>
+            <Text>???: {times.isha.toLocaleTimeString()}</Text>
+            <View style={{marginTop:10}}>
+              <Button title="???? ?????? (????)" onPress={playAzan} />
+            </View>
+          </>
+        ) : <Text>?????? ???? ?? ??? ?? ?? ????? ?? ???? ?? ??? ??...</Text>}
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.label}>??????</Text>
+        <Text>- ??? ?? ?????? ??? ?????????? ?? ????? ???</Text>
+        <Text>- assets/azan.mp3 ?? ??? ???? ???????? ?? ?????</Text>
+      </View>
+
+      <View style={{height:60}} />
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    padding: 20,
+    paddingTop: Constants.statusBarHeight + 10
+  },
+  title: { fontSize: 22, fontWeight: '700', marginBottom: 6 },
+  credit: { fontSize: 12, color: '#333', marginBottom: 12 },
+  card: { backgroundColor: '#fff', padding: 12, borderRadius: 8, marginBottom: 12, shadowColor:'#000', elevation:2 },
+  label: { fontWeight: '700', marginBottom: 6 },
+  time: { fontSize: 28, fontWeight: '700' },
+  sub: { color: '#666' },
+  hijri: { fontSize: 16 },
+  highlight: { marginTop:8, color: '#b22222', fontWeight:'700' }
+});
