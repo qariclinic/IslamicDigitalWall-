@@ -11,22 +11,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up JDK 11
-        uses: actions/setup-java@v4
-        with:
-          java-version: '11'
-          distribution: 'temurin'
-
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-
-      - name: Build with Gradle
-        run: ./gradlew assembleDebug
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-debug.apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+    - uses: actions/checkout@v4
+    - name: Set up JDK 11
+      uses: actions/setup-java@v4
+      with:
+        java-version: '11'
+        distribution: 'temurin'
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+    - name: Build with Gradle
+      run: ./gradlew assembleDebug --stacktrace --info  # لگز اور ایرر دکھانے کے لیے
+    - name: List build outputs  # بلڈ فائلیں چیک کرنے کے لیے
+      run: ls -la app/build/outputs/apk/debug/
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      if: always()  # ہمیشہ چلے، چاہے بلڈ فیل ہو
+      with:
+        name: app-debug.apk
+        path: app/build/outputs/apk/debug/app-debug.apk
