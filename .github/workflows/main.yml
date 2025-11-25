@@ -2,7 +2,7 @@ name: Flutter Build
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, master ]
 
 jobs:
   build:
@@ -11,27 +11,36 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-
-    - name: Setup Java
-      uses: actions/setup-java@v4
       with:
-        distribution: 'temurin'
-        java-version: '17'
+        submodules: recursive
 
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
       with:
         flutter-version: '3.19.0'
-
+        
+    - name: Find and set project directory
+      run: |
+        # Find pubspec.yaml
+        PUBSPEC_PATH=$(find . -name "pubspec.yaml" -type f | head -1)
+        if [ -z "$PUBSPEC_PATH" ]; then
+          echo "❌ pubspec.yaml not found!"
+          exit 1
+        fi
+        PROJECT_DIR=$(dirname "$PUBSPEC_PATH")
+        echo "📁 Project directory: $PROJECT_DIR"
+        echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
+        
     - name: Install dependencies
       run: flutter pub get
-
+      working-directory: ${{ env.PROJECT_DIR }}
+      
     - name: Build APK
       run: flutter build apk --release
-
+      working-directory: ${{ env.PROJECT_DIR }}
+      
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: release-apk
-        path: build/app/outputs/flutter-apk/*.apk
-        retention-days: 7
+        name: flutter-app
+        path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/*.apk
